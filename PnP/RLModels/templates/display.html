@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <title>Plug and Play Form</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+        <script>
+            function showValue(ids){
+                document.getElementById(ids+'op').innerHTML = document.getElementById(ids).value;
+            };
+        </script>
+    </head>
+    <body>
+        <h1>Resource Allocation Platform</h1>
+        <h2>Dataset</h2>
+        {% if df1 %}
+            {{df1|safe}}
+        {% endif %}
+        <form method = "post" contactForm" name="contactForm" action="{% url 'run' %}" enctype="multipart/form-data">
+            {% csrf_token %}
+            <fieldset disabled>
+                <div class="form-group">
+                  <label for="disabledTextInput">Datafile</label>
+                  <input type="text" id="disabledTextInput" class="form-control" placeholder="{{ filename }}" name = "filename" value = "{{ filename }}">
+                </div>
+            </fieldset>
+            <div class="form-row">
+              <div class="col-md-4 mb-3">
+                <label for="validationServer01">Resource to Allocate</label>
+                <input type="text" class="form-control is-valid" id="validationServer01" value="Vaccines" required>
+                <div class="valid-feedback">
+                  Looks good!
+                </div>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="inputState">States column</label>
+                <select id="inputState" class="form-control" name="states">
+                    {% for col in cols %}
+                        <option value="{{ col }}">{{ col }}</option>
+                    {% endfor %}
+                </select>
+                <div class="valid-feedback">
+                    Looks good!
+                </div>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="inputState">Features</label>
+                <select id="inputState" class="form-control" name = "features" multiple>
+                    {% for col in cols %}
+                        <option value="{{ col }}">{{ col }}</option>
+                    {% endfor %}
+                </select>
+                <div class="valid-feedback">
+                    Looks good!
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+                <div class="col-md-4 mb-3">
+                    <label for="customRange1">Number of Resources</label>
+                    <input class = "rangeip" type="range" id="customRange1" name= "total_resources" onmousemove="showValue('customRange1')">
+                    <label for="customRange1" id="customRange1op">50</label>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="customRange2">Episodes</label>
+                    <input class = "rangeip" type="range" id="customRange2" name = "episodes" onmousemove="showValue('customRange2')">
+                    <label for="customRange2" id="customRange2op">50</label>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="customRange3">Epochs</label>
+                    <input class = "rangeip" type="range" id="customRange3" name ="epochs" onmousemove="showValue('customRange3')">
+                    <label for="customRange3" id = "customRange3op">50</label>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="col-md-4 mb-3">
+                <input type="submit" value="Run Model" class="btn btn-primary">
+                <span class="submitting"></span>
+                </div>
+            </div>
+          </form>
+        
+          <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+          <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+          <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    </body>
+</html> 
