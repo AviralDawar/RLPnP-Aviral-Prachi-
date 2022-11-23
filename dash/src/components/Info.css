@@ -1,0 +1,9 @@
+.parent{
+    display: flex;
+    background-color: white;
+    align-items: right;
+    color: #556A7F;
+    position: relative;
+    text-align: center;
+    margin-top: auto;
+}
