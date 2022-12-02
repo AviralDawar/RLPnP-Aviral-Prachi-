@@ -23,8 +23,7 @@ function FileUploader({ childToParent }) {
   //State to store the values
   const [values, setValues] = useState([]);
   
-  // Pagination stuffs
-  const [slicedValues, setslicedValues] = useState([]);
+  // Pagination stuffs 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5); 
 
@@ -51,6 +50,7 @@ function FileUploader({ childToParent }) {
       })
       .catch((err) => console.log(err));
   };
+
   const changeHandler = (e) => {
     setState({
       filename: e.target.files[0],
@@ -74,6 +74,8 @@ function FileUploader({ childToParent }) {
         // Filtered Values
         setValues(valuesArray);
         // <Multiselect options = {tableRows} />
+         
+
         childToParent({
           options: rowsArray[0],
           filename: "",
@@ -82,11 +84,18 @@ function FileUploader({ childToParent }) {
     });
   }; 
   // Function to slice the data
+  
+  //  const  slicedData=values.slice((currentPage-1)*itemsPerPage,currentPage*itemsPerPage);
+  //      setslicedValues(slicedData);
+       
+  
+  //   Pagination
+  const indexOfLastdata = currentPage * itemsPerPage;
+  const indexOfFirstdata = indexOfLastdata - itemsPerPage;
+  const slicedValues = values.slice(indexOfFirstdata, indexOfLastdata); 
+
   const paginate=(event,value)=>{
-       setCurrentPage(value); 
-       console.log(currentPage);
-   const  slicedData=values.slice((currentPage-1)*itemsPerPage,currentPage*itemsPerPage);
-       setslicedValues(slicedData);
+       setCurrentPage(value);  
  
   }
 
