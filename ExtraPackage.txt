@@ -1,0 +1,7 @@
+use command :
+
+npm i @material-ui/core
+
+or 
+
+npm i @material-ui/core
