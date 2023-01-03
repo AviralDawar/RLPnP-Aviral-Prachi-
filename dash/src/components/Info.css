@@ -7,3 +7,7 @@
     text-align: center;
     margin-top: auto;
 }
+.tempdiv{
+    min-height: 200px;
+    overflow: hidden;
+}

@@ -6,20 +6,19 @@ function Plotnew(props) {
   function addTraces(data) {
     let traces = [];
 
-    let dates = data.xax;
+    let states = data.xax;
     let lines = data.yax;
 
     // Set up traces for each entity
     console.log("Lines: ", data.yax);
-    for (const [key, value] of Object.entries(lines)) {
+    
       traces.push({
-        type: "scatter",
+        type: "bar",
         mode: "lines",
-        x: dates,
-        y: value,
-        name: key,
+        x: states,
+        y: lines,
       });
-    }
+    
 
     return traces;
   }

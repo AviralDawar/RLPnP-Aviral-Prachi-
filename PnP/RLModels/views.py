@@ -11,8 +11,12 @@ from .utils import get_plot
 import random
 import json
 
-saveFile = ""
+import sys
+sys.path.insert(1, '../rl_libs/')
+from data_driven import data_run
 
+
+saveFile = ""
 
 class upList(APIView):
     def get(self, request, format=None):
@@ -66,6 +70,7 @@ def index(request):
 
 @api_view(['GET', 'POST'])
 def disp(request):
+    print("CALLED VIEWS.DISPLAY")
     if(request.method == 'POST'):
         temp = request.POST
         filename = './dataset/' + temp.get('filename', 'abc.csv')
@@ -84,36 +89,40 @@ def disp(request):
         saveFile = filename
         my_dict = {
             'cols': cols,
-            # 'df1': data.head(10).to_html(classes='table table-stripped'),
+            'df': data.to_json(),
             'filename': filename,
         }
+
     return HttpResponse(json.dumps(my_dict))
 
 
+
 def run(request):
+    print("CALLED VIEWS.RUN")
     if(request.method == 'POST'):
         temp = request.POST
-        print("Received: ", temp)
-        print("Filename: ", saveFile)
-        titles = ['Assam', 'Maharashta', 'Nagaland', 'Delhi', 'Jharkhand']
-        yax = {}
+        print(f"temp: {temp}")
 
-        for i in range(5):
-            y = []
-            for _ in range(10):
-                y.append(random.randint(0, 200))
-            yax[titles[i]] = y
+        print("calling data_run")
+        best_actions, best_rewards, output_file = data_run(temp)
 
-        xax = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        # df = pd.read_csv(temp.get('filename'))
-        # st = temp.get('states')
-        # op1 = [[] for i in range(5)]
-        # y = [i for i in range(10)]
-        # for o in op1:
-        #     for _ in range(10):
-        #         o.append(random.randint(0,25))
+        
 
-        # sample = get_plot(op1,'Distribution per day','Days','Action Values',df[st].unique(),y)
+        data = pd.read_csv('../PnP/dataset/abc.csv')
+        distribution_area = temp['rewards.value']
+        quantity = int(temp['quantity'])
+
+        num_states = len(data[distribution_area].unique())
+        titles = data[distribution_area].unique()
+
+        xax = titles.tolist()
+        yax = best_actions.tolist()
+        
+        print(type(xax))
+        print(type(yax))
+
         data = {'xax': xax, 'yax': yax}
 
+
     return HttpResponse(json.dumps(data))
+

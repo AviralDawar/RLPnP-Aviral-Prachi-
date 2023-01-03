@@ -13,9 +13,13 @@ from gym import spaces
 import matplotlib.pyplot as plt 
 import math
 import random
-from stable_baselines import PPO2, A2C, ACKTR
-from stable_baselines.common.cmd_util import make_vec_env
+
+from stable_baselines3 import A2C, DQN
+
 from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.preprocessing import LabelEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler, MinMaxScaler  
 import pandas as pd
 import csv
 from sklearn.decomposition import NMF
@@ -33,23 +37,24 @@ class StatesEnv(gym.Env):
     
     
     # Initialize
-    def __init__(self, s, episodes, total,states, discrete_cc):
+    def __init__(self, s, episodes, total,states, discrete_cc, affected_feature):
 
         self.states = s #no of independent simulations to be run 
+        self.affected_feature = affected_feature
         
         # lower limit of confirmed and death
-        low = np.array(s*[0,0]).reshape((s,2))
+        low = np.ones((s,3))
         # higher limit of confirmed and death
-        high = np.array(s*[100,20]).reshape((s,2))
+        high = np.ones((s,3)) * 100
 
         # observation_space = states (grid)
-        self.observation_space = spaces.Box(low, high, shape=(s, 2), dtype = np.float)
+        self.observation_space = spaces.Box(low, high, shape=(s, 3), dtype = np.float)
 
         # actions are vectors of the form [n1, n2, n3,...nk] for k states 
-        # self.action_space = spaces.Box(low = np.zeros((2), dtype = int), high = np.array([100,100]), shape = (s,2), dtype = np.float)
+        self.action_space = spaces.Box(low = np.zeros((s), dtype = int), high = np.ones((s), dtype = int)* total)
 
-        # Action space is vector
-        self.action_space = spaces.Box(low = np.zeros(s, ),high = np.array([total]*s), shape=(s, ), dtype = np.float)
+        # # Action space is vector
+        # self.action_space = spaces.Discrete(total)
 
         # starts at step = 0
         self.curr_step = 0
@@ -75,11 +80,11 @@ class StatesEnv(gym.Env):
         self.min_reward_seq = []
         self.best_actions = []
         self.reward_list = []
-        self.st_ates = states
+        self.st_ates = self.states
         self.non_transformed = []
 
         self.discrete_cc = discrete_cc
-        print("States: ",self.st_ates)
+        self.running_reward_list = []
             
     def get_discrete_int(self, n):
         discrete_int = int(n)
@@ -105,7 +110,6 @@ class StatesEnv(gym.Env):
         
 
     def step(self, action): 
-
         # check if we're done
         if self.curr_step >= self.episodes - 1:
             self.done = True
@@ -119,21 +123,18 @@ class StatesEnv(gym.Env):
        
         #start with equal distribution 
         if self.curr_step == 1:
-          self.action_list = np.array([self.fixed_total/(self.states)]*(self.states))
+          self.action_list = np.array([self.fixed_total/(self.states)])*(self.states)
           self.reward_list = []
         else:
           self.action_list = action
 
         #exploration vs exploitation        
         if random.uniform(0, 1) < self.epsilon:
-            for i in range(self.states):
-              action[i] = np.random.randint(0, self.fixed_total)
-            self.action_list = action
-                        
+            self.action_list = np.random.randint(0, self.fixed_total, self.states)
         else:
             self.action_list = action
 
-        # print ("Action List: ", self.action_list)
+        print ("Action: ", self.action_list)
 
         # Proportion
         sum_of_actions = sum(self.action_list)
@@ -144,31 +145,14 @@ class StatesEnv(gym.Env):
 
         temp_actions = self.action_list.reshape((self.action_list.shape[0], 1))
 
-        # Discretize actions
-        est = KBinsDiscretizer(n_bins=3, encode='ordinal', strategy='uniform')
-        est.fit(temp_actions)
-        self.action_list = est.transform(temp_actions).reshape((self.action_list.shape[0], ))
-
-        # print ("HIIII: ", self.action_list.shape)
-
-        #update action_list to store only the most recently used action values 
-        # self.action_list = action
-        # print("Distribution set: ",self.action_list)
 
         #no of units distrbuted to respective states              
         for i in range(self.states):
             self.received[i] = self.action_list[i]
-
-        #simulation
-        for i in range(self.states):
-          if(self.states_cond[i,0] >=0):
-            self.states_cond[i,0] = self.states_cond[i,0]-1
              
 
         #reward only when task done 
         reward = self.get_reward()
-        self.reward_list.append(reward)
-        
 
         # increment episode
         self.curr_step += 1
@@ -179,22 +163,19 @@ class StatesEnv(gym.Env):
       reward = [0]*self.states
 
       for i in range(self.states): 
-        imp_feature = self.discrete_cc[i]
+        imp_feature = self.discrete_cc[i][self.affected_feature]
         action = self.action_list[i]
 
-        if ((imp_feature == 0 and action == 0) or (imp_feature == 1 and action == 1) or (imp_feature == 2 and action == 2)):
-          reward[i] = 1
+        # print(f"imp_feature: {imp_feature}")
+        # print(f"action: {action}")
 
-        elif ((imp_feature == 0 and action == 1) or (imp_feature == 1 and action == 0) or (imp_feature == 1 and action == 2)):
-          reward[i] = 0
-
-        elif ((imp_feature == 0 and action == 2) or (imp_feature == 2 and action == 0)):
-          reward[i] = -1
+        reward[i] = 100 * np.exp(- ((action - imp_feature) ** 2) * 10000)
 
       # print("Reward distribution: ", reward)
+      self.reward_list.append(reward)
 
       rew = sum(reward)
-      # print("Episode ",self.curr_step," Reward: ", rew)
+      print("Episode ",self.curr_step," Reward: ", reward)
 
       if(rew > self.min_reward):
         self.min_reward = rew
@@ -209,130 +190,121 @@ class StatesEnv(gym.Env):
 
 # Discretize confirmed cases
 def data_run(inp):
+
   print(f"Inside data_run: inp: {inp}")
+
   #Read data file given by user
-  data = pd.read_csv(inp.file_path)
-  num_states = len(data[inp.states].unique())
+  data = pd.read_csv('../PnP/dataset/abc.csv')
 
-  print(f"num_states: {num_states}")
+  # Inside data_run: inp: <QueryDict: {'filename': [''], 'episodes': ['30'], 'epochs': ['30'], 
+  # 'total_resources': ['30'], 'resource': ['vaccine'], 'quantity': ['100'], 'states.value': ['Confirmed.cases'],
+  # 'states.label': ['Confirmed.cases'], 'rewards.value': ['State...UT'], 'rewards.label': ['State...UT'], 
+  # 'features.0.value': ['State...UT'], 'features.0.label': ['State...UT'], 'features.1.value': ['Confirmed.cases'], 
+  # 'features.1.label': ['Confirmed.cases'], 'model.value': ['DQN'], 'model.label': ['DQN']}>
 
-  #Get column names
-  cols = data.columns.values.tolist()
-  print(f"cols: {cols}")
+  resource = inp['resource']
+  quantity = int(inp['quantity'])
+  distribution_area = inp['rewards.value']
+  affected_feature = inp['states.value']
 
-  #Create an array with numerical data only
-  remove_val = []
-  remove_ind = []
-  cn = 0
+  is_temporal = 'temporalAttribute.value' in list(inp.keys())
+  if is_temporal:
+    temporal_feature = inp['temporalAttribute.value']
+    print(f"temporal_feature: {temporal_feature}")
 
-  for i in data.dtypes:
-    cm = str(i)
-    if cm != 'int64' and cm != 'float64':
-      remove_val.append(cols[cn])
-      remove_ind.append(cn)
-    cn+=1
+  print(f"resource: {resource},\nquantity: {quantity}, \ndistribution_area: {distribution_area}, \naffected_feature: {affected_feature}")
   
-
-  df = data.drop(remove_val,axis=1)
-  arr = df.to_numpy()
-
-  #Change all negative values to 0
-  for i in range(0,len(arr)):
-    for j in range(0,len(arr[i])):
-      if(arr[i][j]< 0):
-        arr[i][j]=0
+  n=5
+  features = []
+  for i in range(n):
+    features.append(inp[f"features.{i}.value"])
 
 
-  #Find NMF value and normalize
-  model = NMF(n_components = 1)
-  W = model.fit_transform(arr)
-  H = model.components_
-  W = np.array(W)
-  cn = 0
-  for i in range(0,len(W)):
-    if(cn == num_states):
-      cn = 0
-    if(cn == 0):
-      sm = 0
-      for j in range(0,num_states):
-        sm+=W[i+j][0]
-      for j in range(0,num_states):
-        W[i+j][0] /= sm
-    cn+=1
-  df1 = np.concatenate((arr,W),axis=1)
-  cols.append('Action Value')
-  for i in remove_val:
-    cols.remove(i)
+  print(f"num of unique distribution areas: {len(data[distribution_area].unique())}")
+
+  cols = features
+  if distribution_area not in features:
+    cols.append(distribution_area)
+  if affected_feature not in features:
+    cols.append(affected_feature)
+
+  affected_feature = cols.index(affected_feature)
+  data = data[cols]
   
-  df1 = pd.DataFrame(df1, columns = cols)
-  
+  # convert nominal to catagorical data
+  datatypes = data.dtypes
+  label_encoder = LabelEncoder() 
+  nominal = [] 
+  for i in range(len(datatypes)):
+    if datatypes[i] == 'object':      # string values i.e. nominal data
+      nominal.append(i)
+      arr = data[data.columns[i]]
+      arr= label_encoder.fit_transform(arr)  
+      data[data.columns[i]] = arr
 
-  #Find feature with highest correlation
-  corr = df1.corr()
-  labels = cols
-  values = []
-  mx = -100
-  ft = 0
-  cn = 0
-  for i in corr['Action Value']:
-    values.append(i)
-    if(mx < i and cols[cn] != 'Action Value'):
-      mx = i
-      ft = cn
-    cn+=1
-  
+  # fill missing values for nominal data using mode
+  mode_imputer= SimpleImputer(missing_values=np.nan, strategy='most_frequent')  
 
-      
-  #Plotting correlation values
-  # fig = plt.figure(figsize = (10, 5))
-  # # creating the bar plot
-  # labels.pop()
-  # values.pop()
-  # plt.bar(labels, values,width = 0.4)
-  # plt.xlabel("Features")
-  # plt.ylabel("Correlation Values")
-  # plt.show()
+  for i in nominal:
+    arr = data[data.columns[i]].to_numpy().reshape(-1, 1)
+    imputer = mode_imputer.fit(arr)
+    data[data.columns[i]] = imputer.transform(arr)  
+
+  # fill missing values for rest of the data using mean
+  mean_imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+  st = MinMaxScaler()
+
+  for i in range(len(cols)):
+    if i not in nominal:
+      arr = data[data.columns[i]].to_numpy().reshape(-1, 1)
+      imputer = mode_imputer.fit(arr)
+      data[data.columns[i]] = st.fit_transform(imputer.transform(arr))  
+
+  print(data.head())
+  print(data.info())
 
 
-  temp_imp = np.array(data[cols[ft]])
-  temp_imp = temp_imp.reshape((temp_imp.shape[0], 1))
+  if is_temporal:
+    data = data.sort_values(temporal_feature)
 
-  est = KBinsDiscretizer(n_bins=3, encode='ordinal', strategy='uniform')
-  est.fit(temp_imp)
-  temp_imp = est.transform(temp_imp)
+  temp_imp = np.array(data)
+
+
   rewards = []
   best_rewards = []
   best_actions = []
-  # 15 hospitals
-  no_states = num_states
+  # # 15 hospitals
+  no_states = len(data[distribution_area].unique())
   prev = 0
-  no_episodes = inp.episodes
-  total_available = inp.total_resources
+  no_episodes = inp['episodes']
+  total_available = inp['total_resources']
   # each day
-  for i in range(0,len(data),num_states):
+  for i in range(0,len(data),no_states):
     #Intialize matrix with values
     discrete_cc = []
     states = []
-    # all states data for that day
+
     for j in range(prev,prev+no_states):
       st = []
-      for k in inp.attributes:
-        st.append(float(data.loc[j,[k]]))
+      for k in cols:
+        st.append(float(data.loc[j,k]))
       states.append(st)
       discrete_cc.append((temp_imp[j]))
       
     prev += no_states
-    print("States: ",states)
-    print("Discrete: ",discrete_cc)
+    # print("States: ",states)
+    # print("Discrete: ",discrete_cc)
     
       
-      # init environment - s=3, ep = 1000, total = 100
-    env = StatesEnv(no_states,inp.epochs,inp.total_resources,states, discrete_cc)
+    # init environment - s=3, ep = 1000, total = 100
+    env = StatesEnv(no_states,int(inp['epochs']),quantity,states, discrete_cc, affected_feature)
     
-  #   #print(env.st_ates)
-  #   # ACKTR model with each episode = 10 timesteps and 100 episodes
-    model = ACKTR('MlpPolicy', env, verbose=1).learn(inp.episodes)
-    print("Best actions: ",env.best_actions,"\nBest reward: ", env.min_reward)
+    print(env.st_ates)
+    # ACKTR model with each episode = 10 timesteps and 100 episodes
+
+    model = A2C("MlpPolicy", env, verbose=1).learn(total_timesteps=10)
+
+    print("Best actions: ",env.best_actions * quantity,"\nBest reward: ", env.min_reward)
     rewards = env.reward_list
     best_rewards.append(env.min_reward_seq)
     best_actions.append(env.best_actions)
@@ -356,12 +328,12 @@ def data_run(inp):
       
       sub_iter += 1
       
-      if (sub_iter == len(data[inp.states].unique())):
+      if (sub_iter == len(data[distribution_area].unique())):
         sub_iter = 0
         main_iter += 1
 
       # write a row to the csv file
       writer.writerow(row)
-  
-  return best_actions, best_rewards, 'acktr_data_output.csv'
+  return best_actions[-1] * quantity, best_rewards, 'acktr_data_output.csv'
+
 
